@@ -1,0 +1,18 @@
+[
+  {
+    "id": "test1",
+    "host": "imap.testmail.com",
+    "port": 993,
+    "secure": true,
+    "user": "test1@example.com",
+    "pass": "app_password_or_oauth_token"
+  },
+  {
+    "id": "test2",
+    "host": "imap.testmail.com",
+    "port": 993,
+    "secure": true,
+    "user": "test2@example.com",
+    "pass": "app_password_or_oauth_token"
+  }
+]
