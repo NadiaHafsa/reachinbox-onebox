@@ -19,7 +19,8 @@ export async function categorizeEmail(subject: string, body: string) {
     }),
   });
 
-  const data = await response.json();
+  // response.json() has an unknown shape from Gemini/OpenAI — cast to any for safe access
+  const data: any = await response.json();
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 
   // Default fallback

@@ -1,31 +1,32 @@
-// services/backend/src/routes/emails.ts
-import express from "express";
-import { esClient } from "../elastic/client";
+import express from 'express';
+import { esClient } from '../elastic/client';
 
 const router = express.Router();
 
-router.get("/search", async (req, res) => {
+router.get('/search', async (req, res) => {
   try {
-    const q = req.query.q ? String(req.query.q) : "";
+    const q = req.query.q ? String(req.query.q) : '';
 
+    // ✅ Proper Elastic 8+ structure
     const result = await esClient.search({
-      index: "emails",
+      index: 'emails',
       query: q
         ? {
             multi_match: {
               query: q,
-              fields: ["subject", "body", "from", "to"],
-              fuzziness: "AUTO",
+              fields: ['subject', 'body', 'from', 'to'],
+              fuzziness: 'AUTO',
             },
           }
-        : { match_all: {} }, // ✅ Default: return all emails when q is empty
+        : { match_all: {} },
+      sort: [{ date: { order: 'desc' } }],
       size: 50,
     });
 
-    const emails = result.hits.hits.map((h: any) => h._source);
+    const emails = result.hits.hits.map((hit: any) => hit._source);
     res.json({ ok: true, results: emails });
   } catch (err: any) {
-    console.error("❌ Error performing search:", err);
+    console.error('❌ Error performing search:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

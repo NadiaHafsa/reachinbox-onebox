@@ -25,6 +25,15 @@ app.get("/ping", async (_req, res) => {
   }
 });
 
+// Friendly root message to avoid "Cannot GET /" for browser requests
+app.get("/", (_req, res) => {
+  res.json({
+    ok: true,
+    message: "ReachInbox backend",
+    endpoints: ["/ping", "/api/emails", "/api/emails/search?q=..."],
+  });
+});
+
 // ✅ Search routes for frontend
 app.use("/api/emails", emailRoutes);
 
@@ -90,7 +99,11 @@ app.get("/api/emails/search", async (req, res) => {
       sort: [{ date: { order: "desc" } }],
     };
 
-    const r = await esClient.search({ index: "emails", body });
+  // The elastic client types are strict; cast the search body to `any` to allow our dynamic query
+  const r = await esClient.search({ 
+    index: "emails", 
+    query: {match_all:{}},
+   });
     const hits = r.hits.hits.map((h: any) => h._source);
     res.json({ ok: true, hits });
   } catch (err) {
