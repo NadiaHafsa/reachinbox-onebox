@@ -128,5 +128,16 @@ app.post("/api/emails/:id/suggest-reply", async (req, res) => {
 // ✅ Initialize
 (async () => {
   await ensureEmailIndex();
+  app.get("/", (req, res) => {
+  res.send(`
+    <h1>🚀 Real-Time Email Onebox Backend</h1>
+    <p>Status: <strong>Running</strong></p>
+    <p>Try the health check:</p>
+    <pre><a href="/ping">/ping</a></pre>
+    <p>Or test the API:</p>
+    <pre><a href="/api/emails/search?q=">/api/emails/search?q=</a></pre>
+  `);
+});
+
   app.listen(PORT, () => console.log(`🚀 Backend running on http://localhost:${PORT}`));
 })();
