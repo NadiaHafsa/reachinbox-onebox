@@ -138,6 +138,59 @@ app.post("/api/emails/:id/suggest-reply", async (req, res) => {
     <pre><a href="/api/emails/search?q=">/api/emails/search?q=</a></pre>
   `);
 });
+app.post("/internal/seed", async (req, res) => {
+  try {
+    const emails = [
+      {
+        id: "101",
+        accountId: "demo@example.com",
+        folder: "INBOX",
+        subject: "Interested in your product",
+        body: "Hey, I saw your outreach and would like to know more about your service.",
+        from: "lead1@gmail.com",
+        to: ["demo@example.com"],
+        date: new Date(),
+        aiCategory: "Interested",
+      },
+      {
+        id: "102",
+        accountId: "demo@example.com",
+        folder: "INBOX",
+        subject: "Out of office reply",
+        body: "I am currently out of the office until Monday.",
+        from: "user2@gmail.com",
+        to: ["demo@example.com"],
+        date: new Date(),
+        aiCategory: "Out of Office",
+      },
+      {
+        id: "103",
+        accountId: "demo@example.com",
+        folder: "INBOX",
+        subject: "Not interested at this time",
+        body: "Appreciate your follow-up, but we’ve decided not to proceed right now.",
+        from: "ceo@agency.com",
+        to: ["demo@example.com"],
+        date: new Date(),
+        aiCategory: "Not Interested",
+      },
+    ];
+
+    for (const email of emails) {
+      await esClient.index({
+        index: "emails",
+        id: email.id,
+        document: email,
+      });
+    }
+
+    await esClient.indices.refresh({ index: "emails" });
+    res.json({ ok: true, message: "Seeded sample emails" });
+  } catch (err) {
+    console.error("❌ Seeding error:", err);
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
 
   app.listen(PORT, () => console.log(`🚀 Backend running on http://localhost:${PORT}`));
 })();
