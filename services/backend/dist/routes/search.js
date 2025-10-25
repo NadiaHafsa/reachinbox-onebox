@@ -10,22 +10,12 @@ router.get('/search', async (req, res) => {
     const q = req.query.q || '';
     try {
         const result = await client_1.esClient.search({
-            index: 'emails',
-            query: {
-                bool: {
-                    must: [
-                        {
-                            multi_match: {
-                                query: 'q',
-                                fields: ['subject', 'body', 'from', 'to'],
-                                fuzziness: 'AUTO',
-                            },
-                        },
-                    ],
-                },
+            index: "emails",
+            body: {
+                query: { match_all: {} },
             },
         });
-        res.json(result.hits);
+        res.json(result.body.hits);
     }
     catch (error) {
         console.error(error);

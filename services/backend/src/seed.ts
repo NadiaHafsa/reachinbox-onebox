@@ -71,7 +71,7 @@ async function seedEmails() {
     await esClient.index({
       index: "emails",
       id: email.id,
-      document: email,
+      body: email,
     });
   }
 

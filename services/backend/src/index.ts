@@ -12,7 +12,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 const IMAP_SECRET = process.env.IMAP_SYNC_SECRET || "secret";
 
 // ✅ Health check
@@ -20,28 +20,31 @@ app.get("/ping", async (_req, res) => {
   try {
     const es = await esClient.ping();
     res.json({ ok: true, es: !!es });
-  } catch {
+  } catch (err) {
+    console.error("❌ Ping failed:", err);
     res.status(500).json({ ok: false, es: false });
   }
 });
 
-// Friendly root message to avoid "Cannot GET /" for browser requests
+// ✅ Root message
 app.get("/", (_req, res) => {
   res.json({
     ok: true,
     message: "ReachInbox backend",
-    endpoints: ["/ping", "/api/emails", "/api/emails/search?q=..."],
+    endpoints: ["/ping", "/internal/seed", "/api/emails/search?q="],
   });
 });
 
-// ✅ Search routes for frontend
+// ✅ Attach email routes
 app.use("/api/emails", emailRoutes);
 
-// ✅ Ingestion endpoint for IMAP worker
+// ✅ Endpoint for IMAP sync or manual ingestion
 app.post("/internal/new-email", async (req, res) => {
   try {
     const auth = req.headers["x-sync-secret"];
-    if (auth !== IMAP_SECRET) return res.status(401).json({ error: "unauthorized" });
+    if (auth !== IMAP_SECRET) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
 
     const { id, accountId, folder, subject, body, from, to, date } = req.body;
     if (!id || !subject)
@@ -62,21 +65,15 @@ app.post("/internal/new-email", async (req, res) => {
       indexedAt: new Date(),
     };
 
-    // ✅ FIXED: use `document:` (not `body:`) for Elasticsearch v8
     await esClient.index({
       index: "emails",
       id,
-      document: doc,
+      body: doc,
     });
 
-    // Optional: refresh immediately in dev
     await esClient.indices.refresh({ index: "emails" });
 
-    // Optional logging for demo
-    if (aiCategory === "Interested") {
-      console.log("🔥 Interested lead detected:", subject, "from", from);
-    }
-
+    console.log("📨 Indexed new email:", subject);
     return res.json({ ok: true, id, aiCategory });
   } catch (err) {
     console.error("❌ Error in /internal/new-email:", err);
@@ -84,63 +81,10 @@ app.post("/internal/new-email", async (req, res) => {
   }
 });
 
-// ✅ Search endpoint
-app.get("/api/emails/search", async (req, res) => {
+// ✅ Manual seeding route (for Bonsai/OpenSearch or local ES)
+app.post("/internal/seed", async (_req, res) => {
   try {
-    const q = (req.query.q as string) || "";
-    const must: any[] = [];
-    if (q) {
-      must.push({ multi_match: { query: q, fields: ["subject", "body"], fuzziness: "AUTO" } });
-    }
-
-    const body = {
-      query: { bool: { must } },
-      size: 50,
-      sort: [{ date: { order: "desc" } }],
-    };
-
-  // The elastic client types are strict; cast the search body to `any` to allow our dynamic query
-  const r = await esClient.search({ 
-    index: "emails", 
-    query: {match_all:{}},
-   });
-    const hits = r.hits.hits.map((h: any) => h._source);
-    res.json({ ok: true, hits });
-  } catch (err) {
-    console.error("❌ Error searching emails:", err);
-    res.status(500).json({ ok: false, error: String(err) });
-  }
-});
-
-// ✅ Suggest-reply stub
-app.post("/api/emails/:id/suggest-reply", async (req, res) => {
-  try {
-    const id = req.params.id;
-    const r = await esClient.get({ index: "emails", id });
-    const src = r._source as any;
-    const suggested = `Hi ${src.from || "there"},\n\nThanks for your message regarding "${src.subject}". I'd be happy to schedule a call — what times work for you this week?\n\nBest,\nYour Name`;
-    res.json({ ok: true, suggestion: suggested });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: String(err) });
-  }
-});
-
-// ✅ Initialize
-(async () => {
-  await ensureEmailIndex();
-  app.get("/", (req, res) => {
-  res.send(`
-    <h1>🚀 Real-Time Email Onebox Backend</h1>
-    <p>Status: <strong>Running</strong></p>
-    <p>Try the health check:</p>
-    <pre><a href="/ping">/ping</a></pre>
-    <p>Or test the API:</p>
-    <pre><a href="/api/emails/search?q=">/api/emails/search?q=</a></pre>
-  `);
-});
-app.post("/internal/seed", async (req, res) => {
-  try {
-    const emails = [
+    const sampleEmails = [
       {
         id: "101",
         accountId: "demo@example.com",
@@ -156,6 +100,17 @@ app.post("/internal/seed", async (req, res) => {
         id: "102",
         accountId: "demo@example.com",
         folder: "INBOX",
+        subject: "Meeting Booked for Tomorrow",
+        body: "Let's confirm our meeting for 10 AM tomorrow via Zoom.",
+        from: "client@company.com",
+        to: ["demo@example.com"],
+        date: new Date(),
+        aiCategory: "Meeting Booked",
+      },
+      {
+        id: "103",
+        accountId: "demo@example.com",
+        folder: "INBOX",
         subject: "Out of office reply",
         body: "I am currently out of the office until Monday.",
         from: "user2@gmail.com",
@@ -164,7 +119,7 @@ app.post("/internal/seed", async (req, res) => {
         aiCategory: "Out of Office",
       },
       {
-        id: "103",
+        id: "104",
         accountId: "demo@example.com",
         folder: "INBOX",
         subject: "Not interested at this time",
@@ -174,23 +129,62 @@ app.post("/internal/seed", async (req, res) => {
         date: new Date(),
         aiCategory: "Not Interested",
       },
+      {
+        id: "105",
+        accountId: "demo@example.com",
+        folder: "INBOX",
+        subject: "Spam offer",
+        body: "You won’t believe this amazing investment opportunity!!!",
+        from: "spammer@scam.com",
+        to: ["demo@example.com"],
+        date: new Date(),
+        aiCategory: "Spam",
+      },
     ];
 
-    for (const email of emails) {
+    for (const email of sampleEmails) {
       await esClient.index({
         index: "emails",
         id: email.id,
-        document: email,
+        body: email,
       });
     }
 
     await esClient.indices.refresh({ index: "emails" });
-    res.json({ ok: true, message: "Seeded sample emails" });
+    res.json({ ok: true, message: "✅ Seeded 5 sample emails successfully" });
   } catch (err) {
     console.error("❌ Seeding error:", err);
     res.status(500).json({ ok: false, error: String(err) });
   }
 });
 
+// ✅ Email search endpoint
+app.get("/api/emails/search", async (req, res) => {
+  try {
+    const q = (req.query.q as string) || "";
+    const must: any[] = q
+      ? [{ multi_match: { query: q, fields: ["subject", "body", "from", "to"], fuzziness: "AUTO" } }]
+      : [];
+
+    const response = await esClient.search({
+      index: "emails",
+      body: {
+        query: { bool: { must } },
+        size: 50,
+        sort: [{ date: { order: "desc" } }],
+      },
+    });
+
+    const emails = (response.body.hits.hits || []).map((hit: any) => hit._source);
+    res.json({ ok: true, hits: emails });
+  } catch (err) {
+    console.error("❌ Error searching emails:", err);
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// ✅ Startup
+(async () => {
+  await ensureEmailIndex();
   app.listen(PORT, () => console.log(`🚀 Backend running on http://localhost:${PORT}`));
 })();

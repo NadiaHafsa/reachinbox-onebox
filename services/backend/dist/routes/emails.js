@@ -12,20 +12,15 @@ router.get('/search', async (req, res) => {
         // ✅ Proper Elastic 8+ structure
         const result = await client_1.esClient.search({
             index: 'emails',
-            query: q
-                ? {
-                    multi_match: {
-                        query: q,
-                        fields: ['subject', 'body', 'from', 'to'],
-                        fuzziness: 'AUTO',
-                    },
-                }
-                : { match_all: {} },
-            sort: [{ date: { order: 'desc' } }],
-            size: 50,
+            body: {
+                query: q
+                    ? { multi_match: { query: q, fields: ['subject', 'body'] } }
+                    : { match_all: {} },
+                sort: [{ date: { order: 'desc' } }],
+            },
         });
-        const emails = result.hits.hits.map((hit) => hit._source);
-        res.json({ ok: true, results: emails });
+        const emails = result.body.hits.hits.map((hit) => hit._source);
+        res.json({ ok: true, hits: emails });
     }
     catch (err) {
         console.error('❌ Error performing search:', err);

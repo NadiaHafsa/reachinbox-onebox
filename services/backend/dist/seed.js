@@ -70,7 +70,7 @@ async function seedEmails() {
         await client_1.esClient.index({
             index: "emails",
             id: email.id,
-            document: email,
+            body: email,
         });
     }
     await client_1.esClient.indices.refresh({ index: "emails" });
